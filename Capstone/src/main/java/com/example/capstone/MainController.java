@@ -6,6 +6,8 @@ import com.example.capstone.database.SupplierDAO;
 import com.example.capstone.model.Category;
 import com.example.capstone.model.Product;
 import com.example.capstone.model.Supplier;
+import com.example.capstone.util.AsyncLoader;
+import com.example.capstone.util.SessionManager;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -13,101 +15,106 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 
 public class MainController {
 
-    /* ── Stat card labels ── */
     @FXML private Label statSkuLabel;
     @FXML private Label statValueLabel;
     @FXML private Label statLowLabel;
-
-    /* ── Search field ── */
+    @FXML private Label selectedStockLabel;
     @FXML private TextField searchField;
 
-    /* ── Products table ── */
-    @FXML private TableView<Product>           productTable;
-    @FXML private TableColumn<Product,Integer> idColumn;
-    @FXML private TableColumn<Product,String>  nameColumn;
-    @FXML private TableColumn<Product,String>  categoryColumn;
-    @FXML private TableColumn<Product,String>  supplierColumn;
-    @FXML private TableColumn<Product,Double>  priceColumn;
-    @FXML private TableColumn<Product,Integer> qtyColumn;
+    @FXML private TableView<Product> productTable;
+    @FXML private TableColumn<Product, Integer> idColumn;
+    @FXML private TableColumn<Product, String> nameColumn;
+    @FXML private TableColumn<Product, String> categoryColumn;
+    @FXML private TableColumn<Product, String> supplierColumn;
+    @FXML private TableColumn<Product, Double> priceColumn;
+    @FXML private TableColumn<Product, Integer> qtyColumn;
 
-    /* ── Categories table ── */
-    @FXML private TableView<Category>           categoryTable;
-    @FXML private TableColumn<Category,Integer> catIdColumn;
-    @FXML private TableColumn<Category,String>  catNameColumn;
-    @FXML private TableColumn<Category,String>  catDescColumn;
+    @FXML private TableView<Category> categoryTable;
+    @FXML private TableColumn<Category, Integer> catIdColumn;
+    @FXML private TableColumn<Category, String> catNameColumn;
+    @FXML private TableColumn<Category, String> catDescColumn;
 
-    /* ── Suppliers table ── */
-    @FXML private TableView<Supplier>           supplierTable;
-    @FXML private TableColumn<Supplier,Integer> supIdColumn;
-    @FXML private TableColumn<Supplier,String>  supNameColumn;
-    @FXML private TableColumn<Supplier,String>  supContactColumn;
-    @FXML private TableColumn<Supplier,String>  supPhoneColumn;
-    @FXML private TableColumn<Supplier,String>  supEmailColumn;
+    @FXML private TableView<Supplier> supplierTable;
+    @FXML private TableColumn<Supplier, Integer> supIdColumn;
+    @FXML private TableColumn<Supplier, String> supNameColumn;
+    @FXML private TableColumn<Supplier, String> supContactColumn;
+    @FXML private TableColumn<Supplier, String> supPhoneColumn;
+    @FXML private TableColumn<Supplier, String> supEmailColumn;
 
-    /* ── Content panes (only one visible at a time) ── */
-    @FXML private javafx.scene.layout.VBox productsPane;
-    @FXML private javafx.scene.layout.VBox categoriesPane;
-    @FXML private javafx.scene.layout.VBox suppliersPane;
+    @FXML private VBox productsPane;
+    @FXML private VBox categoriesPane;
+    @FXML private VBox suppliersPane;
 
-    /* ── Sidebar nav buttons ── */
     @FXML private Button navProducts;
     @FXML private Button navCategories;
     @FXML private Button navSuppliers;
 
-    /* ── DAOs ── */
-    private final ProductDAO  productDAO  = new ProductDAO();
+    private final ProductDAO productDAO = new ProductDAO();
     private final CategoryDAO categoryDAO = new CategoryDAO();
     private final SupplierDAO supplierDAO = new SupplierDAO();
 
-    /* ── Observable lists ── */
-    private final ObservableList<Product>  productList  = FXCollections.observableArrayList();
+    private final ObservableList<Product> productList = FXCollections.observableArrayList();
     private final ObservableList<Category> categoryList = FXCollections.observableArrayList();
     private final ObservableList<Supplier> supplierList = FXCollections.observableArrayList();
 
+    private static final String ACTIVE_STYLE =
+            "-fx-background-color: rgba(110,231,183,0.08); "
+                    + "-fx-background-radius: 8; -fx-text-fill: #6EE7B7; "
+                    + "-fx-font-family: 'Outfit'; -fx-font-size: 13; "
+                    + "-fx-alignment: CENTER_LEFT; -fx-padding: 9 10; -fx-border-width: 0;";
 
-    /* ══════════════════════════════════════════════════════════
-       INITIALIZE
-       ══════════════════════════════════════════════════════════ */
+    private static final String INACTIVE_STYLE =
+            "-fx-background-color: transparent; "
+                    + "-fx-background-radius: 8; -fx-text-fill: #6B7280; "
+                    + "-fx-font-family: 'Outfit'; -fx-font-size: 13; "
+                    + "-fx-alignment: CENTER_LEFT; -fx-padding: 9 10; -fx-border-width: 0;";
+
     @FXML
     public void initialize() {
         setupProductTable();
         setupCategoryTable();
         setupSupplierTable();
+        setupSelection();
         setupSearch();
-        loadAll();
-        showProducts();   // default view
+        showProducts();
+        loadDataInBackground();
     }
 
-
-    /* ── Table column bindings ── */
-
     private void setupProductTable() {
-        idColumn      .setCellValueFactory(new PropertyValueFactory<>("productId"));
-        nameColumn    .setCellValueFactory(new PropertyValueFactory<>("name"));
+        idColumn.setCellValueFactory(new PropertyValueFactory<>("productId"));
+        nameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
         categoryColumn.setCellValueFactory(new PropertyValueFactory<>("categoryName"));
         supplierColumn.setCellValueFactory(new PropertyValueFactory<>("supplierName"));
-        priceColumn   .setCellValueFactory(new PropertyValueFactory<>("price"));
-        qtyColumn     .setCellValueFactory(new PropertyValueFactory<>("quantity"));
+        priceColumn.setCellValueFactory(new PropertyValueFactory<>("price"));
+        qtyColumn.setCellValueFactory(new PropertyValueFactory<>("quantity"));
 
-        // colour low-stock rows amber
-        productTable.setRowFactory(tv -> new TableRow<>() {
+        productTable.setRowFactory(table -> new TableRow<Product>() {
             @Override
-            protected void updateItem(Product p, boolean empty) {
-                super.updateItem(p, empty);
-                if (p == null || empty) {
+            protected void updateItem(Product product, boolean empty) {
+                super.updateItem(product, empty);
+
+                if (empty || product == null) {
                     setStyle("");
-                } else if (p.getQuantity() < p.getLowStockThreshold()) {
+                } else if (product.isLowStock()) {
                     setStyle("-fx-background-color: rgba(239,159,39,0.08);");
                 } else {
                     setStyle("");
@@ -119,106 +126,140 @@ public class MainController {
     }
 
     private void setupCategoryTable() {
-        catIdColumn  .setCellValueFactory(new PropertyValueFactory<>("categoryId"));
+        catIdColumn.setCellValueFactory(new PropertyValueFactory<>("categoryId"));
         catNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
         catDescColumn.setCellValueFactory(new PropertyValueFactory<>("description"));
         categoryTable.setItems(categoryList);
     }
 
     private void setupSupplierTable() {
-        supIdColumn     .setCellValueFactory(new PropertyValueFactory<>("supplierId"));
-        supNameColumn   .setCellValueFactory(new PropertyValueFactory<>("name"));
+        supIdColumn.setCellValueFactory(new PropertyValueFactory<>("supplierId"));
+        supNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
         supContactColumn.setCellValueFactory(new PropertyValueFactory<>("contactName"));
-        supPhoneColumn  .setCellValueFactory(new PropertyValueFactory<>("phone"));
-        supEmailColumn  .setCellValueFactory(new PropertyValueFactory<>("email"));
+        supPhoneColumn.setCellValueFactory(new PropertyValueFactory<>("phone"));
+        supEmailColumn.setCellValueFactory(new PropertyValueFactory<>("email"));
         supplierTable.setItems(supplierList);
     }
 
-    /* ── Live search ── */
+    private void setupSelection() {
+        productTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            updateSelectedStockLabel(newValue);
+        });
+
+        updateSelectedStockLabel(null);
+    }
+
     private void setupSearch() {
-        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
-            productList.setAll(
-                    newVal.isBlank()
-                            ? productDAO.getAllProducts()
-                            : productDAO.searchProducts(newVal.trim())
-            );
+        searchField.textProperty().addListener((observable, oldValue, newValue) -> {
+            String keyword = newValue.trim();
+
+            if (keyword.isEmpty()) {
+                productList.setAll(productDAO.getAll());
+            } else {
+                productList.setAll(productDAO.search(keyword));
+            }
+
             refreshStatCards();
         });
     }
 
+    private void loadDataInBackground() {
+        AsyncLoader.run(
+                new AsyncLoader.DataTask<DashboardData>() {
+                    @Override
+                    public DashboardData run() {
+                        DashboardData data = new DashboardData();
+                        data.products = productDAO.getAll();
+                        data.categories = categoryDAO.getAll();
+                        data.suppliers = supplierDAO.getAll();
+                        data.summary = productDAO.getSummary();
+                        data.totalValue = productDAO.getTotalValue();
+                        return data;
+                    }
+                },
+                new AsyncLoader.DataHandler<DashboardData>() {
+                    @Override
+                    public void handle(DashboardData data) {
+                        productList.setAll(data.products);
+                        categoryList.setAll(data.categories);
+                        supplierList.setAll(data.suppliers);
+                        updateStatCards(data.summary, data.totalValue);
+                    }
+                },
+                new AsyncLoader.ErrorHandler() {
+                    @Override
+                    public void handle(Exception e) {
+                        showAlert("Could not load data.");
+                    }
+                }
+        );
+    }
 
-    /* ══════════════════════════════════════════════════════════
-       LOAD DATA
-       ══════════════════════════════════════════════════════════ */
-    private void loadAll() {
-        productList .setAll(productDAO .getAllProducts());
+    private void reloadAllData() {
+        productList.setAll(productDAO.getAll());
         categoryList.setAll(categoryDAO.getAll());
         supplierList.setAll(supplierDAO.getAll());
         refreshStatCards();
     }
 
     private void refreshStatCards() {
-        int[]  summary = productDAO.getSummary();
-        double value   = productDAO.getTotalValue();
-        statSkuLabel .setText(String.valueOf(summary[0]));
-        statValueLabel.setText(String.format("₱%,.2f", value));
-        statLowLabel .setText(String.valueOf(summary[1]));
+        int[] summary = productDAO.getSummary();
+        double totalValue = productDAO.getTotalValue();
+        updateStatCards(summary, totalValue);
     }
 
-
-    /* ══════════════════════════════════════════════════════════
-       SIDEBAR NAVIGATION
-       ══════════════════════════════════════════════════════════ */
-    private static final String ACTIVE_STYLE =
-            "-fx-background-color: rgba(110,231,183,0.08); " +
-                    "-fx-background-radius: 8; -fx-text-fill: #6EE7B7; " +
-                    "-fx-font-family: 'Outfit'; -fx-font-size: 13; " +
-                    "-fx-alignment: CENTER_LEFT; -fx-padding: 9 10; -fx-border-width: 0;";
-
-    private static final String INACTIVE_STYLE =
-            "-fx-background-color: transparent; " +
-                    "-fx-background-radius: 8; -fx-text-fill: #6B7280; " +
-                    "-fx-font-family: 'Outfit'; -fx-font-size: 13; " +
-                    "-fx-alignment: CENTER_LEFT; -fx-padding: 9 10; -fx-border-width: 0;";
+    private void updateStatCards(int[] summary, double totalValue) {
+        statSkuLabel.setText(String.valueOf(summary[0]));
+        statValueLabel.setText(String.format("P %,.2f", totalValue));
+        statLowLabel.setText(String.valueOf(summary[1]));
+    }
 
     @FXML
     public void showProducts() {
-        productsPane  .setVisible(true);  productsPane  .setManaged(true);
-        categoriesPane.setVisible(false); categoriesPane.setManaged(false);
-        suppliersPane .setVisible(false); suppliersPane .setManaged(false);
-        navProducts  .setStyle(ACTIVE_STYLE);
+        productsPane.setVisible(true);
+        productsPane.setManaged(true);
+        categoriesPane.setVisible(false);
+        categoriesPane.setManaged(false);
+        suppliersPane.setVisible(false);
+        suppliersPane.setManaged(false);
+
+        navProducts.setStyle(ACTIVE_STYLE);
         navCategories.setStyle(INACTIVE_STYLE);
-        navSuppliers .setStyle(INACTIVE_STYLE);
-        productList.setAll(productDAO.getAllProducts());
-        refreshStatCards();
+        navSuppliers.setStyle(INACTIVE_STYLE);
     }
 
     @FXML
     public void showCategories() {
-        productsPane  .setVisible(false); productsPane  .setManaged(false);
-        categoriesPane.setVisible(true);  categoriesPane.setManaged(true);
-        suppliersPane .setVisible(false); suppliersPane .setManaged(false);
-        navProducts  .setStyle(INACTIVE_STYLE);
+        productsPane.setVisible(false);
+        productsPane.setManaged(false);
+        categoriesPane.setVisible(true);
+        categoriesPane.setManaged(true);
+        suppliersPane.setVisible(false);
+        suppliersPane.setManaged(false);
+
+        navProducts.setStyle(INACTIVE_STYLE);
         navCategories.setStyle(ACTIVE_STYLE);
-        navSuppliers .setStyle(INACTIVE_STYLE);
+        navSuppliers.setStyle(INACTIVE_STYLE);
+
         categoryList.setAll(categoryDAO.getAll());
     }
 
     @FXML
     public void showSuppliers() {
-        productsPane  .setVisible(false); productsPane  .setManaged(false);
-        categoriesPane.setVisible(false); categoriesPane.setManaged(false);
-        suppliersPane .setVisible(true);  suppliersPane .setManaged(true);
-        navProducts  .setStyle(INACTIVE_STYLE);
+        productsPane.setVisible(false);
+        productsPane.setManaged(false);
+        categoriesPane.setVisible(false);
+        categoriesPane.setManaged(false);
+        suppliersPane.setVisible(true);
+        suppliersPane.setManaged(true);
+
+        navProducts.setStyle(INACTIVE_STYLE);
         navCategories.setStyle(INACTIVE_STYLE);
-        navSuppliers .setStyle(ACTIVE_STYLE);
+        navSuppliers.setStyle(ACTIVE_STYLE);
+
         supplierList.setAll(supplierDAO.getAll());
     }
 
-
-    /* ══════════════════════════════════════════════════════════
-       PRODUCT ACTIONS
-       ══════════════════════════════════════════════════════════ */
     @FXML
     public void onAddProduct() {
         openProductDialog(null);
@@ -226,67 +267,41 @@ public class MainController {
 
     @FXML
     public void onEditProduct() {
-        Product selected = productTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
+        Product product = productTable.getSelectionModel().getSelectedItem();
+
+        if (product == null) {
             showAlert("Select a product to edit.");
             return;
         }
-        openProductDialog(selected);
+
+        openProductDialog(product);
     }
 
     @FXML
     public void onDeleteProduct() {
-        Product selected = productTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
+        Product product = productTable.getSelectionModel().getSelectedItem();
+
+        if (product == null) {
             showAlert("Select a product to delete.");
             return;
         }
-        Optional<ButtonType> result = showConfirm(
-                "Delete \"" + selected.getName() + "\"? This cannot be undone.");
 
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            productDAO.deleteProduct(selected.getProductId());
-            loadAll();
+        if (showConfirm("Delete " + product.getName() + "?")) {
+            productDAO.delete(product.getProductId());
+            reloadAllData();
         }
     }
 
-    private void openProductDialog(Product existing) {
-        try {
-            FXMLLoader loader = new FXMLLoader(
-                    getClass().getResource("/com/example/capstone/AddProductView.fxml"));
-            Parent root = loader.load();
-
-            AddProductController ctrl = loader.getController();
-            ctrl.setCategories(categoryDAO.getAll());
-            ctrl.setSuppliers(supplierDAO.getAll());
-            if (existing != null) ctrl.prefill(existing);
-
-            Stage dialog = new Stage();
-            dialog.initModality(Modality.APPLICATION_MODAL);
-            dialog.setTitle(existing == null ? "Add Product" : "Edit Product");
-            dialog.setScene(new Scene(root));
-            dialog.showAndWait();
-
-            if (ctrl.isSaved()) {
-                Product p = ctrl.getProduct();
-                if (existing == null) {
-                    productDAO.insertProduct(p);
-                } else {
-                    p.setProductId(existing.getProductId());
-                    productDAO.updateProduct(p);
-                }
-                loadAll();
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    @FXML
+    public void onIncreaseStock() {
+        changeSelectedStock(1);
     }
 
+    @FXML
+    public void onDecreaseStock() {
+        changeSelectedStock(-1);
+    }
 
-    /* ══════════════════════════════════════════════════════════
-       CATEGORY ACTIONS
-       ══════════════════════════════════════════════════════════ */
     @FXML
     public void onAddCategory() {
         openCategoryDialog(null);
@@ -294,60 +309,31 @@ public class MainController {
 
     @FXML
     public void onEditCategory() {
-        Category selected = categoryTable.getSelectionModel().getSelectedItem();
-        if (selected == null) { showAlert("Select a category to edit."); return; }
-        openCategoryDialog(selected);
+        Category category = categoryTable.getSelectionModel().getSelectedItem();
+
+        if (category == null) {
+            showAlert("Select a category to edit.");
+            return;
+        }
+
+        openCategoryDialog(category);
     }
 
     @FXML
     public void onDeleteCategory() {
-        Category selected = categoryTable.getSelectionModel().getSelectedItem();
-        if (selected == null) { showAlert("Select a category to delete."); return; }
-        Optional<ButtonType> result = showConfirm(
-                "Delete category \"" + selected.getName() + "\"?");
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            categoryDAO.delete(selected.getCategoryId());
+        Category category = categoryTable.getSelectionModel().getSelectedItem();
+
+        if (category == null) {
+            showAlert("Select a category to delete.");
+            return;
+        }
+
+        if (showConfirm("Delete category " + category.getName() + "?")) {
+            categoryDAO.delete(category.getCategoryId());
             categoryList.setAll(categoryDAO.getAll());
         }
     }
 
-    private void openCategoryDialog(Category existing) {
-        // Inline dialog using a simple TextInputDialog-based flow
-        Dialog<Category> dialog = new Dialog<>();
-        dialog.setTitle(existing == null ? "Add Category" : "Edit Category");
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-        dialog.getDialogPane().setStyle("-fx-background-color: #111214;");
-
-        TextField nameField = styledField(existing != null ? existing.getName() : "");
-        TextField descField = styledField(existing != null ? existing.getDescription() : "");
-
-        javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(10,
-                styledLabel("Category Name"), nameField,
-                styledLabel("Description"),   descField);
-        box.setStyle("-fx-padding: 20; -fx-background-color: #111214;");
-        dialog.getDialogPane().setContent(box);
-
-        dialog.setResultConverter(btn -> {
-            if (btn == ButtonType.OK && !nameField.getText().isBlank()) {
-                Category c = existing != null ? existing : new Category();
-                c.setName(nameField.getText().trim());
-                c.setDescription(descField.getText().trim());
-                return c;
-            }
-            return null;
-        });
-
-        dialog.showAndWait().ifPresent(c -> {
-            if (existing == null) categoryDAO.insert(c);
-            else                  categoryDAO.update(c);
-            categoryList.setAll(categoryDAO.getAll());
-        });
-    }
-
-
-    /* ══════════════════════════════════════════════════════════
-       SUPPLIER ACTIONS
-       ══════════════════════════════════════════════════════════ */
     @FXML
     public void onAddSupplier() {
         openSupplierDialog(null);
@@ -355,95 +341,238 @@ public class MainController {
 
     @FXML
     public void onEditSupplier() {
-        Supplier selected = supplierTable.getSelectionModel().getSelectedItem();
-        if (selected == null) { showAlert("Select a supplier to edit."); return; }
-        openSupplierDialog(selected);
+        Supplier supplier = supplierTable.getSelectionModel().getSelectedItem();
+
+        if (supplier == null) {
+            showAlert("Select a supplier to edit.");
+            return;
+        }
+
+        openSupplierDialog(supplier);
     }
 
     @FXML
     public void onDeleteSupplier() {
-        Supplier selected = supplierTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
+        Supplier supplier = supplierTable.getSelectionModel().getSelectedItem();
+
+        if (supplier == null) {
             showAlert("Select a supplier to delete.");
             return;
         }
 
-        Optional<ButtonType> result = showConfirm(
-                "Delete supplier \"" + selected.getName() + "\"?");
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            supplierDAO.delete(selected.getSupplierId());
+        if (showConfirm("Delete supplier " + supplier.getName() + "?")) {
+            supplierDAO.delete(supplier.getSupplierId());
             supplierList.setAll(supplierDAO.getAll());
         }
     }
 
-    private void openSupplierDialog(Supplier existing) {
-        Dialog<Supplier> dialog = new Dialog<>();
-        dialog.setTitle(existing == null ? "Add Supplier" : "Edit Supplier");
+    private void openProductDialog(Product oldProduct) {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/example/capstone/AddProductView.fxml"));
+            Parent root = loader.load();
+
+            AddProductController controller = loader.getController();
+            controller.setCategories(categoryDAO.getAll());
+            controller.setSuppliers(supplierDAO.getAll());
+
+            if (oldProduct != null) {
+                controller.prefill(oldProduct);
+            }
+
+            Stage dialogStage = new Stage();
+            dialogStage.initModality(Modality.APPLICATION_MODAL);
+            dialogStage.setTitle(oldProduct == null ? "Add Product" : "Edit Product");
+            dialogStage.setScene(new Scene(root));
+            dialogStage.showAndWait();
+
+            if (controller.isSaved()) {
+                Product product = controller.getProduct();
+
+                if (oldProduct == null) {
+                    productDAO.add(product);
+                } else {
+                    product.setProductId(oldProduct.getProductId());
+                    productDAO.update(product);
+                }
+
+                reloadAllData();
+            }
+        } catch (IOException e) {
+            showAlert("Could not open product form.");
+        }
+    }
+
+    private void openCategoryDialog(Category oldCategory) {
+        Dialog<Category> dialog = new Dialog<>();
+        dialog.setTitle(oldCategory == null ? "Add Category" : "Edit Category");
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-        dialog.getDialogPane().setStyle("-fx-background-color: #111214;");
 
-        TextField nameField    = styledField(existing != null ? existing.getName()        : "");
-        TextField contactField = styledField(existing != null ? existing.getContactName() : "");
-        TextField phoneField   = styledField(existing != null ? existing.getPhone()       : "");
-        TextField emailField   = styledField(existing != null ? existing.getEmail()       : "");
-        TextField addressField = styledField(existing != null ? existing.getAddress()     : "");
+        TextField nameField = styledField(oldCategory == null ? "" : oldCategory.getName());
+        TextField descField = styledField(oldCategory == null ? "" : oldCategory.getDescription());
 
-        javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(10,
-                styledLabel("Company Name"),   nameField,
-                styledLabel("Contact Person"), contactField,
-                styledLabel("Phone"),          phoneField,
-                styledLabel("Email"),          emailField,
-                styledLabel("Address"),        addressField);
-        box.setStyle("-fx-padding: 20; -fx-background-color: #111214;");
+        VBox box = new VBox();
+        box.setSpacing(10);
+        box.getChildren().addAll(
+                styledLabel("Category Name"), nameField,
+                styledLabel("Description"), descField
+        );
+
         dialog.getDialogPane().setContent(box);
-
-        dialog.setResultConverter(btn -> {
-            if (btn == ButtonType.OK && !nameField.getText().isBlank()) {
-                Supplier s = existing != null ? existing : new Supplier();
-                s.setName(nameField.getText().trim());
-                s.setContactName(contactField.getText().trim());
-                s.setPhone(phoneField.getText().trim());
-                s.setEmail(emailField.getText().trim());
-                s.setAddress(addressField.getText().trim());
-                return s;
+        dialog.setResultConverter(button -> {
+            if (button == ButtonType.OK && !nameField.getText().trim().isEmpty()) {
+                Category category = oldCategory == null ? new Category() : oldCategory;
+                category.setName(nameField.getText().trim());
+                category.setDescription(descField.getText().trim());
+                return category;
             }
             return null;
         });
 
-        dialog.showAndWait().ifPresent(s -> {
-            if (existing == null) supplierDAO.insert(s);
-            else                  supplierDAO.update(s);
-            supplierList.setAll(supplierDAO.getAll());
-        });
+        dialog.showAndWait();
+        Category result = dialog.getResult();
+
+        if (result != null) {
+            if (oldCategory == null) {
+                categoryDAO.add(result);
+            } else {
+                categoryDAO.update(result);
+            }
+
+            categoryList.setAll(categoryDAO.getAll());
+        }
     }
 
+    private void openSupplierDialog(Supplier oldSupplier) {
+        Dialog<Supplier> dialog = new Dialog<>();
+        dialog.setTitle(oldSupplier == null ? "Add Supplier" : "Edit Supplier");
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
-    /* ══════════════════════════════════════════════════════════
-       HELPERS
-       ══════════════════════════════════════════════════════════ */
-    private void showAlert(String msg) {
-        Alert alert = new Alert(Alert.AlertType.WARNING, msg, ButtonType.OK);
+        TextField nameField = styledField(oldSupplier == null ? "" : oldSupplier.getName());
+        TextField contactField = styledField(oldSupplier == null ? "" : oldSupplier.getContactName());
+        TextField phoneField = styledField(oldSupplier == null ? "" : oldSupplier.getPhone());
+        TextField emailField = styledField(oldSupplier == null ? "" : oldSupplier.getEmail());
+        TextField addressField = styledField(oldSupplier == null ? "" : oldSupplier.getAddress());
+
+        VBox box = new VBox();
+        box.setSpacing(10);
+        box.getChildren().addAll(
+                styledLabel("Company Name"), nameField,
+                styledLabel("Contact Person"), contactField,
+                styledLabel("Phone"), phoneField,
+                styledLabel("Email"), emailField,
+                styledLabel("Address"), addressField
+        );
+
+        dialog.getDialogPane().setContent(box);
+        dialog.setResultConverter(button -> {
+            if (button == ButtonType.OK && !nameField.getText().trim().isEmpty()) {
+                Supplier supplier = oldSupplier == null ? new Supplier() : oldSupplier;
+                supplier.setName(nameField.getText().trim());
+                supplier.setContactName(contactField.getText().trim());
+                supplier.setPhone(phoneField.getText().trim());
+                supplier.setEmail(emailField.getText().trim());
+                supplier.setAddress(addressField.getText().trim());
+                return supplier;
+            }
+            return null;
+        });
+
+        dialog.showAndWait();
+        Supplier result = dialog.getResult();
+
+        if (result != null) {
+            if (oldSupplier == null) {
+                supplierDAO.add(result);
+            } else {
+                supplierDAO.update(result);
+            }
+
+            supplierList.setAll(supplierDAO.getAll());
+        }
+    }
+
+    private void changeSelectedStock(int changeAmount) {
+        Product selectedProduct = productTable.getSelectionModel().getSelectedItem();
+
+        if (selectedProduct == null) {
+            showAlert("Select a product first.");
+            return;
+        }
+
+        Integer userId = null;
+        if (SessionManager.getInstance().isLoggedIn()) {
+            userId = SessionManager.getInstance().getCurrentUser().getUserId();
+        }
+
+        String note;
+        if (changeAmount > 0) {
+            note = "Stock increased from dashboard";
+        } else {
+            note = "Stock decreased from dashboard";
+        }
+
+        boolean success = productDAO.adjustStock(selectedProduct.getProductId(), changeAmount, note, userId);
+
+        if (!success) {
+            showAlert("Stock update failed.");
+            return;
+        }
+
+        Product updatedProduct = productDAO.getById(selectedProduct.getProductId());
+
+        if (updatedProduct == null) {
+            reloadAllData();
+            return;
+        }
+
+        int selectedIndex = productTable.getSelectionModel().getSelectedIndex();
+        productList.set(selectedIndex, updatedProduct);
+        productTable.getSelectionModel().select(selectedIndex);
+
+        refreshStatCards();
+        updateSelectedStockLabel(updatedProduct);
+    }
+
+    private void updateSelectedStockLabel(Product product) {
+        if (product == null) {
+            selectedStockLabel.setText("Selected Stock: --");
+        } else {
+            selectedStockLabel.setText("Selected Stock: " + product.getQuantity());
+        }
+    }
+
+    private boolean showConfirm(String message) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, ButtonType.OK, ButtonType.CANCEL);
+        alert.setHeaderText(null);
+        alert.showAndWait();
+        return alert.getResult() == ButtonType.OK;
+    }
+
+    private void showAlert(String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
         alert.setHeaderText(null);
         alert.showAndWait();
     }
 
-    private Optional<ButtonType> showConfirm(String msg) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, msg, ButtonType.OK, ButtonType.CANCEL);
-        alert.setHeaderText(null);
-        return alert.showAndWait();
-    }
-
     private TextField styledField(String value) {
-        TextField tf = new TextField(value);
-        tf.setStyle("-fx-background-color: #1A1C1F; -fx-text-fill: #F5F4F0; " +
-                "-fx-border-color: rgba(255,255,255,0.10); -fx-border-radius: 8; " +
-                "-fx-background-radius: 8; -fx-padding: 8 12;");
-        return tf;
+        TextField textField = new TextField(value);
+        textField.setStyle("-fx-background-color: #1A1C1F; -fx-text-fill: #F5F4F0; "
+                + "-fx-border-color: rgba(255,255,255,0.10); -fx-border-radius: 8; "
+                + "-fx-background-radius: 8; -fx-padding: 8 12;");
+        return textField;
     }
 
     private Label styledLabel(String text) {
-        Label l = new Label(text.toUpperCase());
-        l.setStyle("-fx-font-family: 'DM Mono'; -fx-font-size: 10; -fx-text-fill: #6B7280;");
-        return l;
+        Label label = new Label(text.toUpperCase());
+        label.setStyle("-fx-font-family: 'DM Mono'; -fx-font-size: 10; -fx-text-fill: #6B7280;");
+        return label;
+    }
+
+    private static class DashboardData {
+        List<Product> products;
+        List<Category> categories;
+        List<Supplier> suppliers;
+        int[] summary;
+        double totalValue;
     }
 }

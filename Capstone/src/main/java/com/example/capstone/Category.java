@@ -1,31 +1,49 @@
 package com.example.capstone.model;
 
-public class Category {
+/**
+ * Category inherits from BaseEntity.
+ * This shows INHERITANCE.
+ */
+public class Category extends BaseEntity {
 
-    private int categoryId;
     private String name;
     private String description;
 
-
-    public Category() {}
+    public Category() {
+    }
 
     public Category(int categoryId, String name, String description) {
-        this.categoryId  = categoryId;
-        this.name        = name;
+        this.id = categoryId;
+        this.name = name;
         this.description = description;
     }
 
+    public int getCategoryId() {
+        return id;
+    }
 
-    public int    getCategoryId()              { return categoryId; }
-    public void   setCategoryId(int id)        { this.categoryId = id; }
+    public void setCategoryId(int categoryId) {
+        this.id = categoryId;
+    }
 
-    public String getName()                    { return name; }
-    public void   setName(String name)         { this.name = name; }
+    public String getName() {
+        return name;
+    }
 
-    public String getDescription()             { return description; }
-    public void   setDescription(String desc)  { this.description = desc; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    /* ComboBox uses toString() as the display label */
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
     @Override
-    public String toString() { return name; }
+    public String getDisplayLabel() {
+        return name;
+    }
 }

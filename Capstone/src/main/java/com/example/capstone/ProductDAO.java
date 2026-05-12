@@ -2,221 +2,275 @@ package com.example.capstone.database;
 
 import com.example.capstone.model.Product;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ProductDAO {
+public class ProductDAO implements GenericDAO<Product> {
 
-    private final Connection connection;
-
-    public ProductDAO() {
-        connection = DBConnection.getInstance().getConnection();
+    private Connection getConnection() {
+        return DBConnection.getInstance().getConnection();
     }
 
+    @Override
+    public boolean add(Product product) {
+        String sql = "INSERT INTO products (category_id, supplier_id, name, description, quantity, price, low_stock_threshold) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-    /* ── Helper: map ResultSet row → Product ── */
-    private Product mapRow(ResultSet rs) throws SQLException {
-        return new Product(
-                rs.getInt("product_id"),
-                rs.getInt("category_id"),
-                rs.getInt("supplier_id"),
-                rs.getString("name"),
-                rs.getString("description"),
-                rs.getInt("quantity"),
-                rs.getDouble("price"),
-                rs.getInt("low_stock_threshold"),
-                rs.getString("category_name"),
-                rs.getString("supplier_name")
-        );
-    }
-
-    /* Base SELECT with JOINs so category/supplier names come along */
-    private static final String BASE_SELECT =
-            "SELECT p.*, " +
-                    "  COALESCE(c.name, '—') AS category_name, " +
-                    "  COALESCE(s.name, '—') AS supplier_name  " +
-                    "FROM products p " +
-                    "LEFT JOIN categories c ON p.category_id = c.category_id " +
-                    "LEFT JOIN suppliers  s ON p.supplier_id  = s.supplier_id ";
-
-
-    /* INSERT */
-    public boolean insertProduct(Product product) {
-
-        String sql = "INSERT INTO products " +
-                "(category_id, supplier_id, name, description, quantity, price, low_stock_threshold) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setInt(1, product.getCategoryId());
-            ps.setInt(2, product.getSupplierId());
-            ps.setString(3, product.getName());
-            ps.setString(4, product.getDescription());
-            ps.setInt(5, product.getQuantity());
-            ps.setDouble(6, product.getPrice());
-            ps.setInt(7, product.getLowStockThreshold());
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            setForeignKeys(statement, product);
+            statement.setString(3, product.getName());
+            statement.setString(4, product.getDescription());
+            statement.setInt(5, product.getQuantity());
+            statement.setDouble(6, product.getPrice());
+            statement.setInt(7, product.getLowStockThreshold());
+            return statement.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error adding product: " + e.getMessage());
             return false;
         }
     }
 
+    @Override
+    public boolean update(Product product) {
+        String sql = "UPDATE products SET category_id = ?, supplier_id = ?, name = ?, description = ?, quantity = ?, price = ?, low_stock_threshold = ? "
+                + "WHERE product_id = ?";
 
-    /* UPDATE */
-    public boolean updateProduct(Product product) {
-
-        String sql = "UPDATE products SET " +
-                "category_id=?, supplier_id=?, name=?, description=?, " +
-                "quantity=?, price=?, low_stock_threshold=? " +
-                "WHERE product_id=?";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setInt(1, product.getCategoryId());
-            ps.setInt(2, product.getSupplierId());
-            ps.setString(3, product.getName());
-            ps.setString(4, product.getDescription());
-            ps.setInt(5, product.getQuantity());
-            ps.setDouble(6, product.getPrice());
-            ps.setInt(7, product.getLowStockThreshold());
-            ps.setInt(8, product.getProductId());
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            setForeignKeys(statement, product);
+            statement.setString(3, product.getName());
+            statement.setString(4, product.getDescription());
+            statement.setInt(5, product.getQuantity());
+            statement.setDouble(6, product.getPrice());
+            statement.setInt(7, product.getLowStockThreshold());
+            statement.setInt(8, product.getProductId());
+            return statement.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error updating product: " + e.getMessage());
             return false;
         }
     }
 
+    @Override
+    public boolean delete(int id) {
+        String sql = "DELETE FROM products WHERE product_id = ?";
 
-    /* DELETE */
-    public boolean deleteProduct(int productId) {
-
-        String sql = "DELETE FROM products WHERE product_id=?";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setInt(1, productId);
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            statement.setInt(1, id);
+            return statement.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error deleting product: " + e.getMessage());
             return false;
         }
     }
 
+    @Override
+    public List<Product> getAll() {
+        List<Product> products = new ArrayList<>();
+        String sql = getBaseSelect() + " ORDER BY p.name";
 
-    /* SELECT ALL */
-    public List<Product> getAllProducts() {
+        try {
+            Statement statement = getConnection().createStatement();
+            ResultSet resultSet = statement.executeQuery(sql);
 
-        List<Product> list = new ArrayList<>();
-
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery(BASE_SELECT + "ORDER BY p.name")) {
-
-            while (rs.next()) list.add(mapRow(rs));
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            while (resultSet.next()) {
+                products.add(readProduct(resultSet));
+            }
+        } catch (Exception e) {
+            System.out.println("Error loading products: " + e.getMessage());
         }
 
-        return list;
+        return products;
     }
 
+    @Override
+    public Product getById(int id) {
+        String sql = getBaseSelect() + " WHERE p.product_id = ?";
 
-    /* SEARCH by name */
-    public List<Product> searchProducts(String keyword) {
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            statement.setInt(1, id);
+            ResultSet resultSet = statement.executeQuery();
 
-        List<Product> list = new ArrayList<>();
-        String sql = BASE_SELECT + "WHERE p.name LIKE ? ORDER BY p.name";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setString(1, "%" + keyword + "%");
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) list.add(mapRow(rs));
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            if (resultSet.next()) {
+                return readProduct(resultSet);
+            }
+        } catch (Exception e) {
+            System.out.println("Error finding product: " + e.getMessage());
         }
 
-        return list;
+        return null;
     }
 
+    public List<Product> search(String keyword) {
+        List<Product> products = new ArrayList<>();
+        String sql = getBaseSelect() + " WHERE p.name LIKE ? OR p.description LIKE ? ORDER BY p.name";
 
-    /* FILTER by category */
-    public List<Product> getByCategory(int categoryId) {
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            String searchValue = "%" + keyword + "%";
+            statement.setString(1, searchValue);
+            statement.setString(2, searchValue);
+            ResultSet resultSet = statement.executeQuery();
 
-        List<Product> list = new ArrayList<>();
-        String sql = BASE_SELECT + "WHERE p.category_id = ? ORDER BY p.name";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setInt(1, categoryId);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) list.add(mapRow(rs));
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            while (resultSet.next()) {
+                products.add(readProduct(resultSet));
+            }
+        } catch (Exception e) {
+            System.out.println("Error searching products: " + e.getMessage());
         }
 
-        return list;
+        return products;
     }
 
+    public List<Product> getLowStock() {
+        List<Product> products = new ArrayList<>();
+        String sql = getBaseSelect() + " WHERE p.quantity < p.low_stock_threshold ORDER BY p.quantity";
 
-    /* LOW STOCK — uses per-product threshold from DB */
-    public List<Product> getLowStockProducts() {
+        try {
+            Statement statement = getConnection().createStatement();
+            ResultSet resultSet = statement.executeQuery(sql);
 
-        List<Product> list = new ArrayList<>();
-        String sql = BASE_SELECT + "WHERE p.quantity < p.low_stock_threshold ORDER BY p.quantity";
-
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-
-            while (rs.next()) list.add(mapRow(rs));
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            while (resultSet.next()) {
+                products.add(readProduct(resultSet));
+            }
+        } catch (Exception e) {
+            System.out.println("Error loading low stock products: " + e.getMessage());
         }
 
-        return list;
+        return products;
     }
 
+    public synchronized boolean adjustStock(int productId, int changeAmount, String note, Integer userId) {
+        Product product = getById(productId);
 
-    /* INVENTORY SUMMARY for stat cards */
-    public int[]    getSummary() {
-        // returns [totalSkus, lowStockCount]
-        int[] result = {0, 0};
-        String sql = "SELECT COUNT(*) AS skus, " +
-                "SUM(quantity < low_stock_threshold) AS low_count FROM products";
+        if (product == null) {
+            return false;
+        }
 
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
+        int oldQuantity = product.getQuantity();
+        int newQuantity = oldQuantity + changeAmount;
 
-            if (rs.next()) {
-                result[0] = rs.getInt("skus");
-                result[1] = rs.getInt("low_count");
+        if (newQuantity < 0) {
+            return false;
+        }
+
+        String updateSql = "UPDATE products SET quantity = ? WHERE product_id = ?";
+        String logSql = "INSERT INTO inventory_logs (product_id, user_id, change_type, quantity_before, quantity_change, quantity_after, note) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+        try {
+            PreparedStatement updateStatement = getConnection().prepareStatement(updateSql);
+            updateStatement.setInt(1, newQuantity);
+            updateStatement.setInt(2, productId);
+            updateStatement.executeUpdate();
+
+            PreparedStatement logStatement = getConnection().prepareStatement(logSql);
+            logStatement.setInt(1, productId);
+
+            if (userId == null) {
+                logStatement.setNull(2, Types.INTEGER);
+            } else {
+                logStatement.setInt(2, userId);
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
+            if (changeAmount >= 0) {
+                logStatement.setString(3, "add");
+            } else {
+                logStatement.setString(3, "remove");
+            }
+
+            logStatement.setInt(4, oldQuantity);
+            logStatement.setInt(5, changeAmount);
+            logStatement.setInt(6, newQuantity);
+            logStatement.setString(7, note);
+            logStatement.executeUpdate();
+
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error updating stock: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public int[] getSummary() {
+        int[] summary = new int[2];
+        String sql = "SELECT COUNT(*) AS total_skus, SUM(quantity < low_stock_threshold) AS low_stock_count FROM products";
+
+        try {
+            Statement statement = getConnection().createStatement();
+            ResultSet resultSet = statement.executeQuery(sql);
+
+            if (resultSet.next()) {
+                summary[0] = resultSet.getInt("total_skus");
+                summary[1] = resultSet.getInt("low_stock_count");
+            }
+        } catch (Exception e) {
+            System.out.println("Error loading summary: " + e.getMessage());
         }
 
-        return result;
+        return summary;
     }
 
     public double getTotalValue() {
-        String sql = "SELECT COALESCE(SUM(quantity * price), 0) AS total FROM products";
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            if (rs.next()) return rs.getDouble("total");
-        } catch (SQLException e) {
-            e.printStackTrace();
+        String sql = "SELECT SUM(quantity * price) AS total_value FROM products";
+
+        try {
+            Statement statement = getConnection().createStatement();
+            ResultSet resultSet = statement.executeQuery(sql);
+
+            if (resultSet.next()) {
+                return resultSet.getDouble("total_value");
+            }
+        } catch (Exception e) {
+            System.out.println("Error computing total value: " + e.getMessage());
         }
+
         return 0;
+    }
+
+    private String getBaseSelect() {
+        return "SELECT p.*, "
+                + "c.name AS category_name, "
+                + "s.name AS supplier_name "
+                + "FROM products p "
+                + "LEFT JOIN categories c ON p.category_id = c.category_id "
+                + "LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id";
+    }
+
+    private Product readProduct(ResultSet resultSet) throws Exception {
+        Product product = new Product();
+        product.setProductId(resultSet.getInt("product_id"));
+        product.setCategoryId(resultSet.getInt("category_id"));
+        product.setSupplierId(resultSet.getInt("supplier_id"));
+        product.setName(resultSet.getString("name"));
+        product.setDescription(resultSet.getString("description"));
+        product.setQuantity(resultSet.getInt("quantity"));
+        product.setPrice(resultSet.getDouble("price"));
+        product.setLowStockThreshold(resultSet.getInt("low_stock_threshold"));
+        product.setCategoryName(resultSet.getString("category_name"));
+        product.setSupplierName(resultSet.getString("supplier_name"));
+        return product;
+    }
+
+    private void setForeignKeys(PreparedStatement statement, Product product) throws Exception {
+        if (product.getCategoryId() > 0) {
+            statement.setInt(1, product.getCategoryId());
+        } else {
+            statement.setNull(1, Types.INTEGER);
+        }
+
+        if (product.getSupplierId() > 0) {
+            statement.setInt(2, product.getSupplierId());
+        } else {
+            statement.setNull(2, Types.INTEGER);
+        }
     }
 }

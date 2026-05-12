@@ -1,48 +1,70 @@
 package com.example.capstone.model;
 
-public class Supplier {
+/**
+ * Supplier inherits from BaseEntity.
+ * This shows INHERITANCE.
+ */
+public class Supplier extends BaseEntity {
 
-    private int    supplierId;
     private String name;
     private String contactName;
     private String phone;
     private String email;
     private String address;
 
-
-    public Supplier() {}
-
-    public Supplier(int supplierId, String name,
-                    String contactName, String phone,
-                    String email,      String address) {
-        this.supplierId  = supplierId;
-        this.name        = name;
-        this.contactName = contactName;
-        this.phone       = phone;
-        this.email       = email;
-        this.address     = address;
+    public Supplier() {
     }
 
+    public int getSupplierId() {
+        return id;
+    }
 
-    public int    getSupplierId()                  { return supplierId; }
-    public void   setSupplierId(int id)            { this.supplierId = id; }
+    public void setSupplierId(int supplierId) {
+        this.id = supplierId;
+    }
 
-    public String getName()                        { return name; }
-    public void   setName(String name)             { this.name = name; }
+    public String getName() {
+        return name;
+    }
 
-    public String getContactName()                 { return contactName; }
-    public void   setContactName(String c)         { this.contactName = c; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public String getPhone()                       { return phone; }
-    public void   setPhone(String phone)           { this.phone = phone; }
+    public String getContactName() {
+        return contactName;
+    }
 
-    public String getEmail()                       { return email; }
-    public void   setEmail(String email)           { this.email = email; }
+    public void setContactName(String contactName) {
+        this.contactName = contactName;
+    }
 
-    public String getAddress()                     { return address; }
-    public void   setAddress(String address)       { this.address = address; }
+    public String getPhone() {
+        return phone;
+    }
 
-    /* ComboBox display label */
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
     @Override
-    public String toString() { return name; }
+    public String getDisplayLabel() {
+        return name;
+    }
 }

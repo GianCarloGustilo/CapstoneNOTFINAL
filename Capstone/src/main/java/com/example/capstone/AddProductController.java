@@ -6,6 +6,8 @@ import com.example.capstone.model.Supplier;
 
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
@@ -14,19 +16,17 @@ import java.util.List;
 
 public class AddProductController {
 
-    @FXML private TextField  nameField;
-    @FXML private TextField  descField;
-    @FXML private TextField  priceField;
-    @FXML private TextField  quantityField;
-    @FXML private TextField  thresholdField;
+    @FXML private TextField nameField;
+    @FXML private TextField descField;
+    @FXML private TextField priceField;
+    @FXML private TextField quantityField;
+    @FXML private TextField thresholdField;
     @FXML private ComboBox<Category> categoryCombo;
     @FXML private ComboBox<Supplier> supplierCombo;
 
-    private boolean saved   = false;
-    private Product product = null;
+    private boolean saved;
+    private Product product;
 
-
-    /* Called by MainController before the dialog opens */
     public void setCategories(List<Category> categories) {
         categoryCombo.setItems(FXCollections.observableArrayList(categories));
     }
@@ -35,86 +35,101 @@ public class AddProductController {
         supplierCombo.setItems(FXCollections.observableArrayList(suppliers));
     }
 
-    /* Pre-fill fields when editing an existing product */
-    public void prefill(Product p) {
-        nameField     .setText(String.valueOf(p.getName()));
-        descField     .setText(p.getDescription() != null ? p.getDescription() : "");
-        priceField    .setText(String.valueOf(p.getPrice()));
-        quantityField .setText(String.valueOf(p.getQuantity()));
-        thresholdField.setText(String.valueOf(p.getLowStockThreshold()));
+    public void prefill(Product product) {
+        nameField.setText(product.getName());
+        descField.setText(product.getDescription());
+        priceField.setText(String.valueOf(product.getPrice()));
+        quantityField.setText(String.valueOf(product.getQuantity()));
+        thresholdField.setText(String.valueOf(product.getLowStockThreshold()));
 
-        categoryCombo.getItems().stream()
-                .filter(c -> c.getCategoryId() == p.getCategoryId())
-                .findFirst()
-                .ifPresent(categoryCombo::setValue);
-
-        supplierCombo.getItems().stream()
-                .filter(s -> s.getSupplierId() == p.getSupplierId())
-                .findFirst()
-                .ifPresent(supplierCombo::setValue);
+        selectCategory(product.getCategoryId());
+        selectSupplier(product.getSupplierId());
     }
-
 
     @FXML
     public void onSave() {
-
-        String name = nameField.getText().trim();
-        String priceText    = priceField.getText().trim();
-        String quantityText = quantityField.getText().trim();
-
-        if (name.isEmpty() || priceText.isEmpty() || quantityText.isEmpty()) {
-            javafx.scene.control.Alert alert =
-                    new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.WARNING,
-                            "Name, price, and quantity are required.",
-                            javafx.scene.control.ButtonType.OK);
-            alert.setHeaderText(null);
-            alert.showAndWait();
+        if (!hasRequiredFields()) {
+            showMessage("Name, price, and quantity are required.");
             return;
         }
 
         try {
-            double price    = Double.parseDouble(priceText);
-            int    quantity = Integer.parseInt(quantityText);
-            int    threshold = thresholdField.getText().isBlank()
-                    ? 10
-                    : Integer.parseInt(thresholdField.getText().trim());
+            Product newProduct = new Product();
+            newProduct.setName(nameField.getText().trim());
+            newProduct.setDescription(descField.getText().trim());
+            newProduct.setPrice(Double.parseDouble(priceField.getText().trim()));
+            newProduct.setQuantity(Integer.parseInt(quantityField.getText().trim()));
 
-            Category selectedCategory = categoryCombo.getValue();
-            Supplier selectedSupplier = supplierCombo.getValue();
+            if (thresholdField.getText().trim().isEmpty()) {
+                newProduct.setLowStockThreshold(10);
+            } else {
+                newProduct.setLowStockThreshold(Integer.parseInt(thresholdField.getText().trim()));
+            }
 
-            product = new Product();
-            product.setName(name);
-            product.setDescription(descField.getText().trim());
-            product.setPrice(price);
-            product.setQuantity(quantity);
-            product.setLowStockThreshold(threshold);
-            product.setCategoryId(selectedCategory != null ? selectedCategory.getCategoryId() : 0);
-            product.setSupplierId(selectedSupplier != null ? selectedSupplier.getSupplierId() : 0);
+            Category category = categoryCombo.getValue();
+            Supplier supplier = supplierCombo.getValue();
 
+            if (category != null) {
+                newProduct.setCategoryId(category.getCategoryId());
+            }
+
+            if (supplier != null) {
+                newProduct.setSupplierId(supplier.getSupplierId());
+            }
+
+            product = newProduct;
             saved = true;
-            close();
-
+            closeWindow();
         } catch (NumberFormatException e) {
-            javafx.scene.control.Alert alert =
-                    new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.WARNING,
-                            "Price and quantity must be valid numbers.",
-                            javafx.scene.control.ButtonType.OK);
-            alert.setHeaderText(null);
-            alert.showAndWait();
+            showMessage("Price, quantity, and low stock value must be valid numbers.");
         }
     }
 
     @FXML
     public void onCancel() {
-        close();
+        closeWindow();
     }
 
-    private void close() {
-        ((Stage) nameField.getScene().getWindow()).close();
+    public boolean isSaved() {
+        return saved;
     }
 
-    public boolean isSaved()   { return saved; }
-    public Product getProduct() { return product; }
+    public Product getProduct() {
+        return product;
+    }
+
+    private boolean hasRequiredFields() {
+        return !nameField.getText().trim().isEmpty()
+                && !priceField.getText().trim().isEmpty()
+                && !quantityField.getText().trim().isEmpty();
+    }
+
+    private void selectCategory(int categoryId) {
+        for (Category category : categoryCombo.getItems()) {
+            if (category.getCategoryId() == categoryId) {
+                categoryCombo.setValue(category);
+                break;
+            }
+        }
+    }
+
+    private void selectSupplier(int supplierId) {
+        for (Supplier supplier : supplierCombo.getItems()) {
+            if (supplier.getSupplierId() == supplierId) {
+                supplierCombo.setValue(supplier);
+                break;
+            }
+        }
+    }
+
+    private void showMessage(String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
+        alert.setHeaderText(null);
+        alert.showAndWait();
+    }
+
+    private void closeWindow() {
+        Stage stage = (Stage) nameField.getScene().getWindow();
+        stage.close();
+    }
 }

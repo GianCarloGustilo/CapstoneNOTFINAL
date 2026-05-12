@@ -25,7 +25,7 @@ public class MainApplication extends Application {
                 );
 
         stage.setTitle(
-                "Smart Inventory System"
+                "CoreStock"
         );
 
         stage.setScene(

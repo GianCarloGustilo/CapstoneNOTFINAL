@@ -2,105 +2,119 @@ package com.example.capstone.database;
 
 import com.example.capstone.model.Supplier;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SupplierDAO {
+public class SupplierDAO implements GenericDAO<Supplier> {
 
-    private final Connection connection;
-
-    public SupplierDAO() {
-        connection = DBConnection.getInstance().getConnection();
+    private Connection getConnection() {
+        return DBConnection.getInstance().getConnection();
     }
 
+    @Override
+    public boolean add(Supplier supplier) {
+        String sql = "INSERT INTO suppliers (name, contact_name, phone, email, address) VALUES (?, ?, ?, ?, ?)";
 
-    /* INSERT */
-    public boolean insert(Supplier supplier) {
-
-        String sql = "INSERT INTO suppliers (name, contact_name, phone, email, address) " +
-                "VALUES (?, ?, ?, ?, ?)";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setString(1, supplier.getName());
-            ps.setString(2, supplier.getContactName());
-            ps.setString(3, supplier.getPhone());
-            ps.setString(4, supplier.getEmail());
-            ps.setString(5, supplier.getAddress());
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            statement.setString(1, supplier.getName());
+            statement.setString(2, supplier.getContactName());
+            statement.setString(3, supplier.getPhone());
+            statement.setString(4, supplier.getEmail());
+            statement.setString(5, supplier.getAddress());
+            return statement.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error adding supplier: " + e.getMessage());
             return false;
         }
     }
 
-
-    /* UPDATE */
+    @Override
     public boolean update(Supplier supplier) {
+        String sql = "UPDATE suppliers SET name = ?, contact_name = ?, phone = ?, email = ?, address = ? WHERE supplier_id = ?";
 
-        String sql = "UPDATE suppliers SET name=?, contact_name=?, phone=?, email=?, address=? " +
-                "WHERE supplier_id=?";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setString(1, supplier.getName());
-            ps.setString(2, supplier.getContactName());
-            ps.setString(3, supplier.getPhone());
-            ps.setString(4, supplier.getEmail());
-            ps.setString(5, supplier.getAddress());
-            ps.setInt(6, supplier.getSupplierId());
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            statement.setString(1, supplier.getName());
+            statement.setString(2, supplier.getContactName());
+            statement.setString(3, supplier.getPhone());
+            statement.setString(4, supplier.getEmail());
+            statement.setString(5, supplier.getAddress());
+            statement.setInt(6, supplier.getSupplierId());
+            return statement.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error updating supplier: " + e.getMessage());
             return false;
         }
     }
 
+    @Override
+    public boolean delete(int id) {
+        String sql = "DELETE FROM suppliers WHERE supplier_id = ?";
 
-    /* DELETE */
-    public boolean delete(int supplierId) {
-
-        String sql = "DELETE FROM suppliers WHERE supplier_id=?";
-
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-
-            ps.setInt(1, supplierId);
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            statement.setInt(1, id);
+            return statement.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error deleting supplier: " + e.getMessage());
             return false;
         }
     }
 
-
-    /* SELECT ALL */
+    @Override
     public List<Supplier> getAll() {
-
-        List<Supplier> list = new ArrayList<>();
+        List<Supplier> suppliers = new ArrayList<>();
         String sql = "SELECT * FROM suppliers ORDER BY name";
 
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
+        try {
+            Statement statement = getConnection().createStatement();
+            ResultSet resultSet = statement.executeQuery(sql);
 
-            while (rs.next()) {
-                list.add(new Supplier(
-                        rs.getInt("supplier_id"),
-                        rs.getString("name"),
-                        rs.getString("contact_name"),
-                        rs.getString("phone"),
-                        rs.getString("email"),
-                        rs.getString("address")
-                ));
+            while (resultSet.next()) {
+                Supplier supplier = new Supplier();
+                supplier.setSupplierId(resultSet.getInt("supplier_id"));
+                supplier.setName(resultSet.getString("name"));
+                supplier.setContactName(resultSet.getString("contact_name"));
+                supplier.setPhone(resultSet.getString("phone"));
+                supplier.setEmail(resultSet.getString("email"));
+                supplier.setAddress(resultSet.getString("address"));
+                suppliers.add(supplier);
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println("Error loading suppliers: " + e.getMessage());
         }
 
-        return list;
+        return suppliers;
+    }
+
+    @Override
+    public Supplier getById(int id) {
+        String sql = "SELECT * FROM suppliers WHERE supplier_id = ?";
+
+        try {
+            PreparedStatement statement = getConnection().prepareStatement(sql);
+            statement.setInt(1, id);
+            ResultSet resultSet = statement.executeQuery();
+
+            if (resultSet.next()) {
+                Supplier supplier = new Supplier();
+                supplier.setSupplierId(resultSet.getInt("supplier_id"));
+                supplier.setName(resultSet.getString("name"));
+                supplier.setContactName(resultSet.getString("contact_name"));
+                supplier.setPhone(resultSet.getString("phone"));
+                supplier.setEmail(resultSet.getString("email"));
+                supplier.setAddress(resultSet.getString("address"));
+                return supplier;
+            }
+        } catch (Exception e) {
+            System.out.println("Error finding supplier: " + e.getMessage());
+        }
+
+        return null;
     }
 }
